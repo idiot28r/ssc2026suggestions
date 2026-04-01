@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Syllabus Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.maateen.me/kalpurush/font.css');
+        @font-face {
+            font-family: 'Kalpurush';
+            src: local('Kalpurush'), url('https://fonts.maateen.me/kalpurush/font.css');
+            unicode-range: U+0980-09FF;
+        }
+
+        :root { --primary: #4338ca; --accent: #10b981; --bg: #f4f7f6; --text-main: #1f2937; --border: #e5e7eb; }
+        body { font-family: 'Segoe UI', system-ui, 'Kalpurush', sans-serif; background: var(--bg); color: var(--text-main); margin: 0; padding-bottom: 60px; }
+        
+        header.syl-header { background: white; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 1px solid var(--border);}
+        .top-status-bar { text-align: center; font-size: 0.85rem; padding: 6px 10px; font-weight: 600; letter-spacing: 0.5px; transition: all 0.3s ease; }
+        .status-guest { background-color: #fee2e2; color: #b91c1c; border-bottom: 1px solid #fca5a5; }
+        .status-logged-in { background-color: #d1fae5; color: #065f46; border-bottom: 1px solid #6ee7b7; }
+        
+        .dashboard { max-width: 900px; margin: 0 auto; padding: 1rem; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .subject-title { margin: 0; color: var(--primary); font-size: 1.8rem; }
+        .back-btn { color: #4b5563; cursor: pointer; font-size: 0.95rem; background: #f3f4f6; padding: 8px 15px; border-radius: 6px; font-weight: 600; text-decoration: none; border: 1px solid #d1d5db;}
+        .back-btn:hover { background: #e5e7eb; }
+
+        .progress-container { background: #e0e7ff; border-radius: 10px; height: 26px; width: 100%; position: relative; overflow: hidden; margin-top: 10px; border: 1px solid #c7d2fe;}
+        .progress-fill { background: var(--accent); height: 100%; width: 0%; transition: width 0.4s ease-out; }
+        .progress-text { position: absolute; width: 100%; text-align: center; top: 0; left: 0; line-height: 26px; font-size: 0.85rem; font-weight: bold; color: #1e3a8a; text-shadow: 0 0 2px rgba(255,255,255,0.8);}
+        .sub-text { font-size: 0.75rem; color: #6b7280; text-align: center; margin-top: 5px; font-weight: 500;}
+
+        .syl-grid { max-width: 900px; margin: 20px auto; padding: 0 15px; display: flex; flex-direction: column; gap: 20px; }
+        .section-card { background: white; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 2px 5px rgba(0,0,0,0.02); overflow: hidden; }
+        .section-header { background: #f9fafb; padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .section-title { margin: 0; font-size: 1.2rem; color: var(--primary); font-weight: bold; }
+        .cq-limit-badge { background: #fee2e2; color: #b91c1c; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
+        
+        .chapter-list { padding: 0; margin: 0; list-style: none; }
+        .chapter-item { padding: 15px 20px; border-bottom: 1px solid var(--border); transition: background 0.2s; }
+        .chapter-item:last-child { border-bottom: none; }
+        .chapter-header { display: flex; justify-content: space-between; align-items: center;}
+        
+        .toggle-arrow { display: inline-block; transition: transform 0.2s; margin-right: 12px; cursor: pointer; font-size: 14px; color: #4f46e5; user-select: none; width: 15px; text-align: center; padding: 5px;}
+        .toggle-arrow.open { transform: rotate(90deg); }
+        
+        input[type="checkbox"] { margin-right: 12px; cursor: pointer; width: 18px; height: 18px; accent-color: var(--accent); }
+        .chapter-title { font-weight: bold; font-size: 1.1rem; color: #374151; cursor: pointer; user-select: none; }
+
+        .topic-list { margin: 10px 0 0 35px; padding-left: 15px; border-left: 2px solid #e0e7ff; list-style: none; display: none; }
+        .topic-list.open { display: block; }
+        
+        .topic-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 1rem; color: #4b5563; }
+        .star-rating { color: #f59e0b; letter-spacing: 2px; font-size: 0.85rem; min-width: 80px; text-align: right; }
+        .completed-text { text-decoration: line-through; color: #9ca3af; }
+    </style>
+</head>
+<body>
+
+    <header class="syl-header">
+        <div id="user-status-banner" class="top-status-bar"></div>
+        
+        <div class="dashboard">
+            <div class="header-top">
+                <h2 class="subject-title" id="display-sub-title">Loading...</h2>
+                <a href="index.html" class="back-btn">← Back to Subjects</a>
+            </div>
+            
+            <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: bold; color: #4b5563; margin-bottom: 5px;">
+                    <span>Estimated Exam Score</span>
+                    <span id="progress-percentage">0%</span>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-fill" id="progress-bar"></div>
+                    <div class="progress-text"><span id="total-earned">0</span> / <span id="total-possible">0</span> Marks Covered</div>
+                </div>
+                <div class="sub-text">Logic: Mandatory 1 CQ per section + SQ/MCQ completion + 1 Extra CQ.</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="syl-grid" id="syl-container">
+        <div style="text-align: center; padding: 40px; color: #6b7280;">Loading syllabus...</div>
+    </main>
+
+    <script>
+        const supabaseUrl = 'https://wgdsddkfrxndtjjezlsy.supabase.co'; 
+        const supabaseKey = 'sb_publishable__GuYvMhrUPXs07wW6Ed_5A_s2Qptdlr'; 
+        
+        // Disabled persistSession to prevent tracking prevention warnings in browser
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey, {
+            auth: { persistSession: false }
+        });
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const subjectId = urlParams.get('sub');
+        const userPhone = urlParams.get('phone');
+        const userName = urlParams.get('name') || 'Student';
+        const isGuest = !userPhone || !subjectId;
+
+        let currentSubjectData = null;
+        let saveTimeout = null;
+
+        function updateStatusUI(state) {
+            const banner = document.getElementById('user-status-banner');
+            if (isGuest) {
+                banner.className = 'top-status-bar status-guest';
+                banner.innerHTML = '⚠️ Guest Mode: Progress is not being saved. (Missing phone or subject ID in URL)';
+                return;
+            }
+            
+            banner.className = 'top-status-bar status-logged-in';
+            if (state === 'saving') {
+                banner.innerText = `👤 Logged in as ${userName} (${userPhone}) — ⏳ Saving...`;
+            } else if (state === 'error') {
+                banner.innerText = `👤 Logged in as ${userName} (${userPhone}) — ❌ Error Saving`;
+            } else if (state === 'saved') {
+                banner.innerText = `👤 Logged in as ${userName} (${userPhone}) — ✅ All changes saved`;
+                setTimeout(() => updateStatusUI('idle'), 3000);
+            } else {
+                banner.innerText = `👤 Logged in as ${userName} (${userPhone})`;
+            }
+        }
+        
+        updateStatusUI('idle');
+
+        function getStars(weight) {
+            const w = parseInt(weight) || 0;
+            if (w >= 80) return '⭐⭐⭐⭐⭐';
+            if (w >= 40) return '⭐⭐⭐';
+            if (w >= 0) return '⭐';
+            return '⭐';
+        }
+
+        async function loadSyllabus() {
+            if (!subjectId) {
+                document.getElementById('syl-container').innerHTML = `<div style="text-align: center; padding: 40px; color: #b91c1c;">Error: No Subject ID provided in URL.</div>`;
+                return;
+            }
+
+            // Fetch Subject Data
+            const { data: subject, error: subError } = await supabaseClient.from('subjects')
+                .select(`*, sections(id, title, min_cq_required, total_cq_available, chapters(id, title, est_mcq, est_sq, topics(id, title, weight)))`)
+                .eq('id', subjectId).single();
+
+            if (subError) { 
+                document.getElementById('syl-container').innerHTML = `<div style="text-align: center; padding: 40px; color: #b91c1c;">Error Loading Subject: ${subError.message}</div>`; 
+                return; 
+            }
+
+            // Fetch Student Progress
+            let completedTopicsDb = new Set();
+            if (!isGuest) {
+                const { data: progress, error: fetchError } = await supabaseClient
+                    .from('student_progress')
+                    .select('completed_topics')
+                    .eq('phone', userPhone)
+                    .eq('subject_id', subjectId)
+                    .maybeSingle(); 
+                
+                if (fetchError) {
+                    console.error("Fetch Error:", fetchError);
+                } else if (progress && progress.completed_topics) {
+                    completedTopicsDb = new Set(progress.completed_topics);
+                }
+            }
+
+            currentSubjectData = subject; 
+            document.getElementById('display-sub-title').innerText = subject.title;
+            const container = document.getElementById('syl-container');
+            let html = '';
+
+            if (subject.sections) {
+                subject.sections.forEach(sec => {
+                    html += `
+                        <div class="section-card">
+                            <div class="section-header">
+                                <h2 class="section-title">${sec.title}</h2>
+                                <span class="cq-limit-badge">Req: ${sec.min_cq_required} | Avail: ${sec.total_cq_available} CQ</span>
+                            </div>
+                            <ul class="chapter-list">
+                    `;
+
+                    if (sec.chapters) {
+                        sec.chapters.forEach(chap => {
+                            html += `
+                                <li class="chapter-item">
+                                    <div class="chapter-header">
+                                        <div style="flex-grow: 1; display: flex; align-items: center;">
+                                            <span class="toggle-arrow">▶</span>
+                                            <input type="checkbox" class="chapter-checkbox" id="chap-${chap.id}">
+                                            <label class="chapter-title" for="chap-${chap.id}">${chap.title}</label>
+                                        </div>
+                                        <div style="font-size: 0.8rem; color: #6b7280; background: #f3f4f6; padding: 4px 10px; border-radius: 6px;">
+                                            MCQ: <b>${chap.est_mcq || 0}</b> | SQ: <b style="color:#d97706">${chap.est_sq || 0}</b>
+                                        </div>
+                                    </div>
+                                    <ul class="topic-list">
+                            `;
+                            
+                            if(chap.topics) {
+                                chap.topics.forEach(top => {
+                                    const isChecked = completedTopicsDb.has(String(top.id)) ? 'checked' : '';
+                                    const textClass = isChecked ? 'completed-text' : '';
+                                    html += `
+                                        <li class="topic-item">
+                                            <div style="flex-grow: 1; display:flex; align-items:center;">
+                                                <input type="checkbox" class="topic-checkbox" id="top-${top.id}" data-id="${top.id}" ${isChecked}>
+                                                <label class="topic-title ${textClass}" for="top-${top.id}">${top.title}</label>
+                                            </div>
+                                            <span class="star-rating">${getStars(top.weight)}</span>
+                                        </li>
+                                    `;
+                                });
+                            }
+                            html += `</ul></li>`;
+                        });
+                    }
+                    html += `</ul></div>`;
+                });
+            }
+
+            container.innerHTML = html;
+            calculateEstimatedMarks(); 
+        }
+
+        function calculateEstimatedMarks() {
+            if (!currentSubjectData) return 0;
+
+            let totalEarnedMCQ = 0;
+            let totalEarnedSQCount = 0;
+            let totalMandatoryCQ = 0;
+            let totalOverflowCQ = 0;
+            let totalMinRequiredCQ = 0;
+
+            const cqValue = parseFloat(currentSubjectData.cq_value_per_q || 10);
+            const sqValue = parseFloat(currentSubjectData.sq_value_per_q || 2);
+            const totalCqToAnswer = parseFloat(currentSubjectData.total_cq_to_answer || 5);
+
+            currentSubjectData.sections.forEach(sec => {
+                let secWeightTotal = 0;
+                let secWeightEarned = 0;
+
+                sec.chapters.forEach(chap => {
+                    let chapWeightTotal = 0;
+                    let chapWeightEarned = 0;
+                    
+                    let chapterCheckbox = document.getElementById(`chap-${chap.id}`);
+                    let allChecked = true, anyChecked = false, count = 0;
+
+                    chap.topics.forEach(top => {
+                        count++;
+                        let w = parseFloat(top.weight || 0);
+                        chapWeightTotal += w;
+                        let cb = document.getElementById(`top-${top.id}`);
+                        let label = cb.nextElementSibling;
+                        
+                        if (cb && cb.checked) {
+                            chapWeightEarned += w;
+                            label.classList.add('completed-text');
+                            anyChecked = true;
+                        } else {
+                            label.classList.remove('completed-text');
+                            allChecked = false;
+                        }
+                    });
+
+                    if (count > 0 && chapterCheckbox) {
+                        chapterCheckbox.checked = allChecked;
+                        chapterCheckbox.indeterminate = !allChecked && anyChecked;
+                    }
+
+                    let ratio = chapWeightTotal > 0 ? (chapWeightEarned / chapWeightTotal) : 0;
+                    totalEarnedMCQ += ratio * parseFloat(chap.est_mcq || 0);
+                    totalEarnedSQCount += ratio * parseFloat(chap.est_sq || 0);
+                    
+                    secWeightTotal += chapWeightTotal;
+                    secWeightEarned += chapWeightEarned;
+                });
+
+                let secRatio = secWeightTotal > 0 ? (secWeightEarned / secWeightTotal) : 0;
+                let minReq = parseFloat(sec.min_cq_required || 1);
+                let avail = parseFloat(sec.total_cq_available || 2);
+                
+                totalMinRequiredCQ += minReq;
+                let potential = avail * secRatio;
+                totalMandatoryCQ += Math.min(potential, minReq);
+                totalOverflowCQ += Math.max(0, potential - minReq);
+            });
+
+            let finalMCQ = Math.min(totalEarnedMCQ, parseFloat(currentSubjectData.max_mcq || 30));
+            let finalSQ = Math.min(totalEarnedSQCount, parseFloat(currentSubjectData.total_sq_to_answer || 10)) * sqValue;
+            
+            let globalOverflowCap = Math.max(0, totalCqToAnswer - totalMinRequiredCQ);
+            let finalCQ = (totalMandatoryCQ + Math.min(totalOverflowCQ, globalOverflowCap)) * cqValue;
+
+            let finalScore = finalMCQ + finalSQ + finalCQ;
+            let totalPossible = parseFloat(currentSubjectData.max_mcq || 0) + parseFloat(currentSubjectData.max_sq || 0) + parseFloat(currentSubjectData.max_cq || 0);
+
+            document.getElementById('total-earned').innerText = finalScore.toFixed(1);
+            document.getElementById('total-possible').innerText = totalPossible;
+            let pct = totalPossible > 0 ? Math.round((finalScore / totalPossible) * 100) : 0;
+            document.getElementById('progress-bar').style.width = pct + '%';
+            document.getElementById('progress-percentage').innerText = pct + '%';
+
+            return finalScore;
+        }
+
+        async function saveProgressToDB(currentScore) {
+            if (isGuest) return;
+            updateStatusUI('saving');
+
+            const checkedBoxes = document.querySelectorAll('.topic-checkbox:checked');
+            const checkedTopicIds = Array.from(checkedBoxes).map(cb => String(cb.dataset.id));
+
+            const { error } = await supabaseClient
+                .from('student_progress')
+                .upsert({
+                    phone: userPhone,
+                    subject_id: subjectId,
+                    name: userName,
+                    completed_topics: checkedTopicIds,
+                    earned_marks: currentScore,
+                    updated_at: new Date().toISOString()
+                }, { 
+                    onConflict: 'phone,subject_id' 
+                });
+
+            if (error) {
+                console.error("Save Error:", error);
+                updateStatusUI('error');
+            } else {
+                updateStatusUI('saved');
+            }
+        }
+
+        document.addEventListener('click', e => {
+            if (e.target.classList.contains('toggle-arrow')) {
+                e.target.classList.toggle('open');
+                e.target.closest('.chapter-item').querySelector('.topic-list').classList.toggle('open');
+            }
+        });
+
+        document.addEventListener('change', e => {
+            if (e.target.classList.contains('chapter-checkbox')) {
+                const boxes = e.target.closest('.chapter-item').querySelectorAll('.topic-checkbox');
+                boxes.forEach(cb => cb.checked = e.target.checked);
+            }
+            
+            if (e.target.classList.contains('chapter-checkbox') || e.target.classList.contains('topic-checkbox')) {
+                const newScore = calculateEstimatedMarks();
+                
+                clearTimeout(saveTimeout);
+                saveTimeout = setTimeout(() => {
+                    saveProgressToDB(newScore);
+                }, 800);
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', loadSyllabus);
+    </script>
+</body>
+</html>

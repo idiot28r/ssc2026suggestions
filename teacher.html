@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Panel - Syllabus & Sorting</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* 1. Add Kalpurush exclusively for Bangla unicode range */
+        @import url('https://fonts.maateen.me/kalpurush/font.css');
+        @font-face {
+            font-family: 'Kalpurush';
+            src: local('Kalpurush'), url('https://fonts.maateen.me/kalpurush/font.css');
+            unicode-range: U+0980-09FF;
+        }
+
+        :root { --primary: #4338ca; --accent: #10b981; --bg: #f4f7f6; --text-main: #1f2937; --card-bg: #ffffff; --border: #e5e7eb; }
+        body { font-family: 'Segoe UI', system-ui, 'Kalpurush', sans-serif; background: var(--bg); color: var(--text-main); margin: 0; padding-bottom: 60px; }
+        
+        #auth-banner { background: #4f46e5; color: white; padding: 10px 20px; text-align: center; font-size: 0.95rem; font-weight: bold; position: sticky; top: 0; z-index: 200;}
+        
+        /* Editable Input Styling */
+        .editable { 
+            background: transparent; border: 1px dashed transparent; color: inherit; font-family: inherit; font-size: inherit; font-weight: inherit; 
+            padding: 2px 4px; border-radius: 4px; width: 100%; box-sizing: border-box; transition: all 0.2s; margin: -3px;
+        }
+        .editable:hover { border-color: #cbd5e1; background: rgba(255,255,255,0.5); cursor: text; }
+        .editable:focus { border-color: var(--primary); background: #fff; outline: none; box-shadow: 0 0 0 2px rgba(67, 56, 202, 0.2); color: var(--text-main); }
+        .editable.num { width: 50px; text-align: center; }
+        
+        /* VIEW 1: SUBJECTS GRID */
+        header.main-header { text-align: center; padding: 40px 20px 20px; }
+        h1 { margin: 0; color: var(--primary); font-size: 2rem; }
+
+        /* Group Tabs */
+        .tab-container { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+        .tab-btn { padding: 8px 20px; border: 2px solid var(--primary); background: transparent; color: var(--primary); border-radius: 30px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        .tab-btn:hover { background: #e0e7ff; }
+        .tab-btn.active { background: var(--primary); color: white; }
+        
+        .grid { max-width: 1000px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+        
+        /* Draggable Subject Cards */
+        .subject-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.02); cursor: grab; }
+        .subject-card:active { cursor: grabbing; }
+        .subject-card.dragging { opacity: 0.5; transform: scale(0.98); border: 2px dashed var(--primary); }
+        .drag-handle { position: absolute; top: 15px; right: 40px; color: #9ca3af; font-size: 1.2rem; cursor: grab; }
+
+        .subject-header-row { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; width: 85%; }
+        .subject-title { font-size: 1.3rem; margin: 0; color: var(--primary); flex: 1; }
+        .short-code-box { font-size: 0.75rem; background: #e5e7eb; padding: 2px 6px; border-radius: 4px; width: 60px;}
+
+        .score-display { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 15px; background: #f8fafc; padding: 10px; border-radius: 8px;}
+        .score-box { text-align: center; }
+        .score-small { font-size: 0.8rem; color: #6b7280; margin-bottom: 4px; font-weight: bold; text-transform: uppercase; }
+        
+        .edit-btn { display: inline-block; width: 100%; text-align: center; padding: 10px; background: #e0e7ff; color: var(--primary); font-weight: bold; border-radius: 6px; border: 1px solid #c7d2fe; cursor: pointer; box-sizing: border-box;}
+        .edit-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
+        
+        .add-card { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px dashed #cbd5e1; background: transparent; cursor: pointer; min-height: 180px; color: #64748b; font-weight: bold; font-size: 1.2rem; transition: all 0.2s; }
+        .add-card:hover { border-color: var(--primary); color: var(--primary); background: #e0e7ff; }
+
+        /* Assign Section */
+        .assign-bar { max-width: 1000px; margin: 0 auto 20px; padding: 15px 20px; background: white; border: 1px solid var(--border); border-radius: 8px; display: flex; gap: 10px; align-items: center; }
+
+        /* VIEW 2: SYLLABUS DETAIL */
+        #syllabus-view { display: none; }
+        header.syl-header { background: var(--primary); color: white; padding: 1rem; position: sticky; top: 38px; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .dashboard { max-width: 900px; margin: 0 auto; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .back-btn { color: white; cursor: pointer; font-size: 0.95rem; background: rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 6px; font-weight: 500; border: none;}
+        .back-btn:hover { background: rgba(255,255,255,0.3); }
+        
+        .syl-grid { max-width: 900px; margin: 20px auto; padding: 0 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        .section-card { background: white; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 2px 5px rgba(0,0,0,0.02); overflow: hidden; }
+        .section-header { background: #f9fafb; padding: 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .section-title { margin: 0; font-size: 1.1rem; color: var(--primary); width: 100%; }
+        
+        /* Chapters & Topics */
+        .chapter-list { padding: 0; margin: 0; list-style: none; }
+        .chapter-item { padding: 15px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; transition: background 0.2s; }
+        .chapter-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;}
+        
+        .toggle-arrow { display: inline-block; transition: transform 0.2s; margin-right: 10px; cursor: pointer; font-size: 14px; color: #4f46e5; user-select: none; width: 15px; text-align: center;}
+        .toggle-arrow.open { transform: rotate(90deg); }
+        input[type="checkbox"] { margin-right: 10px; cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary); }
+
+        .topic-list { margin: 5px 0 0 25px; padding-left: 15px; border-left: 2px solid #e0e7ff; list-style: none; display: none; }
+        .topic-list.open { display: block; }
+
+        .topic-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 0.95rem; }
+        .topic-add { font-size: 0.85rem; color: var(--primary); cursor: pointer; padding: 4px 0; font-weight: 500; display: inline-block; }
+        .topic-add:hover { text-decoration: underline; }
+        
+        .star-rating { color: #f59e0b; letter-spacing: 2px; font-size: 0.85rem; min-width: 80px; display: inline-block; text-align: right; margin-right: 15px; }
+
+        .add-row { padding: 12px 15px; text-align: center; color: var(--accent); font-weight: bold; cursor: pointer; font-size: 0.9rem; background: #f0fdf4;}
+        .add-row:hover { background: #dcfce7; }
+        .add-section-btn { grid-column: 1 / -1; padding: 15px; text-align: center; border: 2px dashed #cbd5e1; border-radius: 12px; color: #64748b; font-weight: bold; cursor: pointer; font-size: 1.1rem; transition: all 0.2s;}
+        .add-section-btn:hover { border-color: var(--primary); color: var(--primary); background: #e0e7ff; }
+
+        .del-btn { background: #fee2e2; color: #ef4444; border: none; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 0.7rem; margin-left: 10px; opacity: 0.3; transition: 0.2s; font-weight: bold;}
+        .del-btn:hover { opacity: 1; background: #ef4444; color: white; }
+    </style>
+</head>
+<body>
+
+    <div id="auth-banner">✏️ Admin Edit Mode Active - Changes auto-save instantly</div>
+
+    <div id="subjects-view">
+        <header class="main-header">
+            <h1>Syllabus & Subject Manager</h1>
+            <p style="color: #6b7280;">Drag cards to reorder. Click text/numbers to edit inline.</p>
+            
+            <div class="tab-container">
+                <button class="tab-btn active" onclick="switchGroup('science')">🔬 Science</button>
+                <button class="tab-btn" onclick="switchGroup('business')">📊 Business</button>
+                <button class="tab-btn" onclick="switchGroup('humanities')">🌍 Humanities</button>
+            </div>
+        </header>
+        
+        <div class="assign-bar" id="assign-bar" style="display: none;">
+            <span style="font-weight: bold; color: var(--text-main);">Assign to group:</span>
+            <select id="unassigned-select" style="padding: 5px; flex: 1; border-radius: 4px;"><option value="">-- Select Subject --</option></select>
+            <button onclick="assignToGroup()" style="padding: 6px 15px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;">Add</button>
+        </div>
+
+        <main class="grid" id="grid-container">
+            <div style="text-align: center; grid-column: 1/-1; padding: 40px; color: #6b7280;">Loading database...</div>
+        </main>
+    </div>
+
+    <div id="syllabus-view">
+        <header class="syl-header">
+            <div class="dashboard">
+                <div class="header-top">
+                    <div style="display: flex; gap: 10px; align-items: center; width: 70%;">
+                        <input type="text" class="editable" id="active-sub-icon" style="font-size: 1.8rem; width: 50px; text-align: center;" title="Emoji Icon" onchange="updateRecord('subjects', activeSubjectId, 'icon_emoji', this.value)">
+                        <h2 style="margin: 0; flex: 1;"><input type="text" class="editable" id="active-sub-title" onchange="updateRecord('subjects', activeSubjectId, 'title', this.value)"></h2>
+                        <input type="text" class="editable" id="active-sub-short" style="font-size: 0.9rem; width: 80px; background: rgba(0,0,0,0.2);" title="Short Code" onchange="updateRecord('subjects', activeSubjectId, 'short_code', this.value)">
+                    </div>
+                    <button class="back-btn" onclick="showView('subjects')">← Back to Grid</button>
+                </div>
+                <div style="display: flex; gap: 20px; color: #e0e7ff; font-size: 0.9rem; flex-wrap: wrap; align-items: center;">
+                    <div>Max CQ: <input type="number" class="editable num" style="color:white; font-weight:bold;" id="active-sub-cq" onchange="updateRecord('subjects', activeSubjectId, 'max_cq', this.value)"></div>
+                    <div>Max MCQ: <input type="number" class="editable num" style="color:white; font-weight:bold;" id="active-sub-mcq" onchange="updateRecord('subjects', activeSubjectId, 'max_mcq', this.value)"></div>
+                    <div>Max SQ: <input type="number" class="editable num" style="color:#fcd34d; font-weight:bold;" id="active-sub-sq" onchange="updateRecord('subjects', activeSubjectId, 'max_sq', this.value)"></div>
+                    <div>CQ Val/Q: <input type="number" class="editable num" style="color:white; font-weight:bold;" id="active-sub-cqval" onchange="updateRecord('subjects', activeSubjectId, 'cq_value_per_q', this.value)"></div>
+                    
+                    <div style="margin-left: auto; background: rgba(255,255,255,0.2); padding: 5px 12px; border-radius: 6px; color: white; font-weight: bold; border: 1px solid rgba(255,255,255,0.3);">
+                        Selected Weight: <span id="total-progress-weight">0</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <main class="syl-grid" id="syl-container"></main>
+    </div>
+
+    <script>
+        const supabaseUrl = 'https://wgdsddkfrxndtjjezlsy.supabase.co'; 
+        const supabaseKey = 'sb_publishable__GuYvMhrUPXs07wW6Ed_5A_s2Qptdlr'; 
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+
+        let activeSubjectId = null;
+        let allSubjects = [];
+        let currentGroup = 'science';
+
+        function getStars(weight) {
+            const w = parseInt(weight) || 0;
+            if (w >= 80) return '⭐⭐⭐⭐⭐';
+            if (w >= 40) return '⭐⭐⭐';
+            return '⭐';
+        }
+
+        function showView(viewName) {
+            document.getElementById('subjects-view').style.display = viewName === 'subjects' ? 'block' : 'none';
+            document.getElementById('syllabus-view').style.display = viewName === 'syllabus' ? 'block' : 'none';
+            if(viewName === 'subjects') loadSubjectsGrid();
+        }
+
+        async function updateRecord(table, id, column, value, triggerRefresh = false) {
+            const banner = document.getElementById('auth-banner');
+            banner.innerText = "⏳ Saving..."; banner.style.background = "#f59e0b";
+            
+            const { error } = await supabaseClient.from(table).update({ [column]: value }).eq('id', id);
+            
+            if (error) {
+                alert("Error saving: " + error.message);
+                banner.innerText = "❌ Error Saving"; banner.style.background = "#ef4444";
+            } else {
+                banner.innerText = "✅ Saved"; banner.style.background = "#10b981";
+                setTimeout(() => { banner.innerText = "✏️ Admin Edit Mode Active - Changes auto-save instantly"; banner.style.background = "#4f46e5"; }, 2000);
+                if (triggerRefresh) openSyllabus(activeSubjectId);
+            }
+        }
+
+        // --- GRID & DRAG-AND-DROP LOGIC ---
+        function switchGroup(group) {
+            currentGroup = group;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            renderGrid();
+        }
+
+        async function loadSubjectsGrid() {
+            const { data: subjects, error } = await supabaseClient.from('subjects').select('*');
+            if (error) { document.getElementById('grid-container').innerHTML = `Error: ${error.message}`; return; }
+            allSubjects = subjects;
+            renderGrid();
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('grid-container');
+            const select = document.getElementById('unassigned-select');
+            grid.innerHTML = ''; select.innerHTML = '<option value="">-- Select a subject to add --</option>';
+            
+            const rankCol = `rank_${currentGroup}`;
+            
+            let assigned = allSubjects.filter(sub => sub[rankCol] !== null).sort((a, b) => (a[rankCol] || 0) - (b[rankCol] || 0));
+            let unassigned = allSubjects.filter(sub => sub[rankCol] === null);
+
+            assigned.forEach(sub => {
+                const card = document.createElement('div');
+                card.className = 'subject-card';
+                card.draggable = true;
+                card.dataset.id = sub.id;
+                card.innerHTML = `
+                    <div class="drag-handle" title="Drag to reorder">☰</div>
+                    <button class="del-btn" style="position: absolute; top: 15px; right: 10px;" onclick="removeFromGroup('${sub.id}')" title="Remove from group">X</button>
+                    
+                    <div class="subject-header-row">
+                        <span style="font-size:1.5rem;">${sub.icon_emoji || '📘'}</span>
+                        <h2 class="subject-title"><input type="text" class="editable" value="${sub.title}" onchange="updateRecord('subjects', '${sub.id}', 'title', this.value)"></h2>
+                    </div>
+                    
+                    <div class="score-display">
+                        <div class="score-box">
+                            <div class="score-small">Max CQ</div>
+                            <input type="number" class="editable" style="font-size: 1.4rem; font-weight: bold; width: 60px; text-align:center;" value="${sub.max_cq || 0}" onchange="updateRecord('subjects', '${sub.id}', 'max_cq', this.value)">
+                        </div>
+                        <div class="score-box">
+                            <div class="score-small">Max MCQ</div>
+                            <input type="number" class="editable" style="font-size: 1.4rem; font-weight: bold; width: 60px; text-align:center;" value="${sub.max_mcq || 0}" onchange="updateRecord('subjects', '${sub.id}', 'max_mcq', this.value)">
+                        </div>
+                        <div class="score-box" style="border-left: 2px solid #e2e8f0; padding-left: 10px;">
+                            <div class="score-small" style="color:#d97706;">Max SQ</div>
+                            <input type="number" class="editable" style="font-size: 1.4rem; font-weight: bold; width: 60px; text-align:center; color:#d97706;" value="${sub.max_sq || 0}" onchange="updateRecord('subjects', '${sub.id}', 'max_sq', this.value)">
+                        </div>
+                    </div>
+                    <div class="edit-btn" onclick="openSyllabus('${sub.id}')">Edit Syllabus & Topics →</div>
+                `;
+                
+                // Drag Events
+                card.addEventListener('dragstart', function() { setTimeout(() => this.classList.add('dragging'), 0); });
+                card.addEventListener('dragend', function() { this.classList.remove('dragging'); saveNewOrder(); });
+                grid.appendChild(card);
+            });
+
+            grid.addEventListener('dragover', e => {
+                e.preventDefault();
+                const draggingCard = document.querySelector('.dragging');
+                if(!draggingCard) return;
+                const siblings = [...grid.querySelectorAll('.subject-card:not(.dragging)')];
+                const nextSibling = siblings.find(sibling => e.clientY <= sibling.getBoundingClientRect().top + sibling.getBoundingClientRect().height / 2);
+                grid.insertBefore(draggingCard, nextSibling || grid.querySelector('.add-card'));
+            });
+
+            grid.innerHTML += `<div class="add-card" onclick="createSubject()">+ Create Entirely New Subject</div>`;
+
+            if(unassigned.length > 0) {
+                unassigned.forEach(sub => select.innerHTML += `<option value="${sub.id}">${sub.title}</option>`);
+                document.getElementById('assign-bar').style.display = 'flex';
+            } else {
+                document.getElementById('assign-bar').style.display = 'none';
+            }
+        }
+
+        async function saveNewOrder() {
+            const cards = document.querySelectorAll('.subject-card');
+            const rankCol = `rank_${currentGroup}`;
+            const promises = Array.from(cards).map((card, index) => 
+                supabaseClient.from('subjects').update({ [rankCol]: index + 1 }).eq('id', card.dataset.id)
+            );
+            await Promise.all(promises);
+        }
+
+        async function assignToGroup() {
+            const select = document.getElementById('unassigned-select');
+            if(!select.value) return;
+            const rankCol = `rank_${currentGroup}`;
+            const currentMax = Math.max(0, ...allSubjects.filter(s => s[rankCol] !== null).map(s => s[rankCol]));
+            await updateRecord('subjects', select.value, rankCol, currentMax + 1);
+            loadSubjectsGrid();
+        }
+
+        async function removeFromGroup(id) {
+            if(!confirm("Remove from this group? It will go to the unassigned list.")) return;
+            await updateRecord('subjects', id, `rank_${currentGroup}`, null);
+            loadSubjectsGrid();
+        }
+
+        // --- SYLLABUS DETAIL VIEW ---
+        async function openSyllabus(subjectId) {
+            activeSubjectId = subjectId;
+            showView('syllabus');
+            const container = document.getElementById('syl-container');
+            container.innerHTML = `<div style="text-align:center; grid-column:1/-1; padding:40px;">Loading syllabus...</div>`;
+
+            // FIXED: Updated query to use min_cq_required and total_cq_available
+            const { data: subject, error } = await supabaseClient.from('subjects')
+            .select(`*, sections(id, title, min_cq_required, total_cq_available, chapters(id, title, est_mcq, est_sq, topics(id, title, weight)))`)
+            .eq('id', subjectId).single();
+
+            if (error) { container.innerHTML = "Error loading data."; return; }
+
+            document.getElementById('active-sub-title').value = subject.title || '';
+            document.getElementById('active-sub-short').value = subject.short_code || '';
+            document.getElementById('active-sub-icon').value = subject.icon_emoji || '📘';
+            document.getElementById('active-sub-cq').value = subject.max_cq || 0;
+            document.getElementById('active-sub-mcq').value = subject.max_mcq || 0;
+            document.getElementById('active-sub-sq').value = subject.max_sq || 0;
+            document.getElementById('active-sub-cqval').value = subject.cq_value_per_q || 10;
+            document.getElementById('total-progress-weight').innerText = 0;
+
+            let newContainerHtml = '';
+
+            if (subject.sections) {
+                // Fallback sort logic if IDs are provided
+                subject.sections.sort((a,b) => a.id.localeCompare(b.id)); 
+                
+                subject.sections.forEach(sec => {
+                    // FIXED: UI now displays and updates min_cq_required and total_cq_available
+                    let cardHtml = `
+                        <div class="section-card">
+                            <div class="section-header">
+                                <div style="width: 50%; display: flex; align-items:center;">
+                                    <h2 class="section-title"><input type="text" class="editable" value="${sec.title}" onchange="updateRecord('sections', '${sec.id}', 'title', this.value)"></h2>
+                                </div>
+                                <div style="font-weight: bold; font-size: 0.85rem; display: flex; align-items: center; gap: 10px;">
+                                    Min CQ Req: <input type="number" class="editable num" value="${sec.min_cq_required || 0}" onchange="updateRecord('sections', '${sec.id}', 'min_cq_required', this.value)">
+                                    Total CQ Avail: <input type="number" class="editable num" value="${sec.total_cq_available || 0}" onchange="updateRecord('sections', '${sec.id}', 'total_cq_available', this.value)">
+                                    <button class="del-btn" onclick="deleteRecord('sections', '${sec.id}', () => openSyllabus('${subjectId}'))">X</button>
+                                </div>
+                            </div>
+                            <ul class="chapter-list">
+                    `;
+
+                    if (sec.chapters) {
+                        // Fallback sort logic
+                        sec.chapters.sort((a,b) => a.id.localeCompare(b.id));
+                        sec.chapters.forEach(chap => {
+                            cardHtml += `
+                                <li class="chapter-item">
+                                    <div class="chapter-header">
+                                        <div style="flex-grow: 1; display: flex; align-items: center;">
+                                            <span class="toggle-arrow">▶</span>
+                                            <input type="checkbox" class="chapter-checkbox">
+                                            <input type="text" class="editable" style="font-weight:bold; font-size:1.05rem;" value="${chap.title}" onchange="updateRecord('chapters', '${chap.id}', 'title', this.value)">
+                                        </div>
+                                        <div style="font-size: 0.8rem; color: #6b7280; display:flex; align-items:center; gap:8px; background: #f3f4f6; padding: 4px 8px; border-radius: 6px;">
+                                            Est MCQ: <input type="number" class="editable num" style="width:35px;" value="${chap.est_mcq || 0}" onchange="updateRecord('chapters', '${chap.id}', 'est_mcq', this.value)"> |
+                                            Est SQ: <input type="number" class="editable num" style="width:35px; color:#d97706;" value="${chap.est_sq || 0}" onchange="updateRecord('chapters', '${chap.id}', 'est_sq', this.value)">
+                                            <button class="del-btn" onclick="deleteRecord('chapters', '${chap.id}', () => openSyllabus('${subjectId}'))">X</button>
+                                        </div>
+                                    </div>
+                                    <ul class="topic-list">
+                            `;
+                            
+                            if(chap.topics) {
+                                // Defaulting topic sort to weight
+                                chap.topics.sort((a,b) => Number(b.weight) - Number(a.weight)); 
+                                
+                                chap.topics.forEach(top => {
+                                    cardHtml += `
+                                        <li class="topic-item">
+                                            <div style="flex-grow: 1; display:flex; align-items:center;">
+                                                <input type="checkbox" class="topic-checkbox" data-weight="${top.weight || 0}">
+                                                ↳ <input type="text" class="editable" value="${top.title}" onchange="updateRecord('topics', '${top.id}', 'title', this.value)">
+                                            </div>
+                                            <div style="font-size: 0.85rem; color: #6b7280; display:flex; align-items:center; justify-content: flex-end;">
+                                                <span class="star-rating" id="star-${top.id}">${getStars(top.weight)}</span>
+                                                Weight: 
+                                                <input type="number" class="editable num" value="${top.weight}" 
+                                                    oninput="document.getElementById('star-${top.id}').innerText = getStars(this.value)" 
+                                                    onchange="updateRecord('topics', '${top.id}', 'weight', this.value, true)">%
+                                                <button class="del-btn" onclick="deleteRecord('topics', '${top.id}', () => openSyllabus('${subjectId}'))">X</button>
+                                            </div>
+                                        </li>
+                                    `;
+                                });
+                            }
+                            cardHtml += `<li><span class="topic-add" onclick="createTopic('${chap.id}')">+ Add Topic</span></li></ul></li>`;
+                        });
+                    }
+                    cardHtml += `<div class="add-row" onclick="createChapter('${sec.id}')">+ Add Chapter Here</div></ul></div>`;
+                    newContainerHtml += cardHtml;
+                });
+            }
+            newContainerHtml += `<div class="add-section-btn" onclick="createSection('${subjectId}')">+ Add New Section</div>`;
+            container.innerHTML = newContainerHtml;
+        }
+
+        // --- CHECKBOX & WEIGHT LOGIC ---
+        function calculateTotalWeight() {
+            let total = 0;
+            document.querySelectorAll('.topic-checkbox:checked').forEach(cb => {
+                total += parseFloat(cb.getAttribute('data-weight') || 0);
+            });
+            document.getElementById('total-progress-weight').innerText = total;
+        }
+
+        document.addEventListener('click', function(event) {
+            if (event.target.classList.contains('toggle-arrow')) {
+                event.target.classList.toggle('open');
+                event.target.closest('.chapter-item').querySelector('.topic-list').classList.toggle('open');
+            }
+            if (event.target.classList.contains('chapter-checkbox')) {
+                const isChecked = event.target.checked;
+                event.target.closest('.chapter-item').querySelectorAll('.topic-checkbox').forEach(cb => cb.checked = isChecked);
+                calculateTotalWeight();
+            }
+            if (event.target.classList.contains('topic-checkbox')) {
+                const chapterItem = event.target.closest('.chapter-item');
+                const chapterCb = chapterItem.querySelector('.chapter-checkbox');
+                const total = chapterItem.querySelectorAll('.topic-checkbox').length;
+                const checked = chapterItem.querySelectorAll('.topic-checkbox:checked').length;
+                
+                chapterCb.checked = (checked === total && total > 0);
+                chapterCb.indeterminate = (checked > 0 && checked < total);
+                calculateTotalWeight();
+            }
+        });
+
+        // --- CREATION & DELETION ---
+        async function createSubject() {
+            const shortId = prompt("Enter a short DB ID (e.g., chem_1):");
+            if (!shortId) return;
+            const rankCol = `rank_${currentGroup}`;
+            const currentMax = Math.max(0, ...allSubjects.filter(s => s[rankCol] !== null).map(s => s[rankCol]));
+            
+            const payload = { id: shortId, title: "New Subject", max_cq: 0, max_mcq: 0, max_sq: 0, cq_value_per_q: 10, is_active: true };
+            payload[rankCol] = currentMax + 1; // Auto assign to current group
+
+            const { error } = await supabaseClient.from('subjects').insert(payload);
+            if (error) alert(error.message); else loadSubjectsGrid();
+        }
+
+        async function createSection(subjectId) {
+            // FIXED: Insert payload now uses min_cq_required and total_cq_available
+            const { error } = await supabaseClient.from('sections').insert({ id: crypto.randomUUID(), subject_id: subjectId, title: "New Section", min_cq_required: 0, total_cq_available: 0 });
+            if (error) alert(error.message); else openSyllabus(activeSubjectId);
+        }
+
+        async function createChapter(sectionId) {
+            const { error } = await supabaseClient.from('chapters').insert({ id: crypto.randomUUID(), section_id: sectionId, title: "New Chapter", est_mcq: 0, est_sq: 0 });
+            if (error) alert(error.message); else openSyllabus(activeSubjectId);
+        }
+
+        async function createTopic(chapterId) {
+            const { error } = await supabaseClient.from('topics').insert({ id: crypto.randomUUID(), chapter_id: chapterId, title: "New Topic", weight: 50 });
+            if (error) alert(error.message); else openSyllabus(activeSubjectId);
+        }
+
+        async function deleteRecord(table, id, callback) {
+            if (!confirm("Are you sure you want to delete this?")) return;
+            
+            const banner = document.getElementById('auth-banner');
+            banner.innerText = "⏳ Deleting..."; banner.style.background = "#f59e0b";
+
+            const { error } = await supabaseClient.from(table).delete().eq('id', id);
+            if (error) {
+                alert("Error deleting: " + error.message);
+                banner.innerText = "❌ Error Deleting"; banner.style.background = "#ef4444";
+            } else {
+                banner.innerText = "✅ Deleted"; banner.style.background = "#10b981";
+                setTimeout(() => { banner.innerText = "✏️ Admin Edit Mode Active - Changes auto-save instantly"; banner.style.background = "#4f46e5"; }, 2000);
+                if (callback) callback();
+            }
+        }
+
+        // Initialize dashboard
+        showView('subjects');
+    </script>
+</body>
+</html>
