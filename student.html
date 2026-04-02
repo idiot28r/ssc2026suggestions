@@ -227,7 +227,7 @@
             calculateEstimatedMarks(); 
         }
 
-        function calculateEstimatedMarks() {
+function calculateEstimatedMarks() {
             if (!currentSubjectData) return 0;
 
             let totalEarnedMCQ = 0;
@@ -282,7 +282,9 @@
                 });
 
                 let secRatio = secWeightTotal > 0 ? (secWeightEarned / secWeightTotal) : 0;
-                let minReq = parseFloat(sec.min_cq_required || 1);
+                
+                // FIX 1: Safely parse minReq. If it's 0, it will now stay 0 instead of defaulting to 1.
+                let minReq = (sec.min_cq_required !== null && sec.min_cq_required !== undefined && sec.min_cq_required !== '') ? parseFloat(sec.min_cq_required) : 1;
                 let avail = parseFloat(sec.total_cq_available || 2);
                 
                 totalMinRequiredCQ += minReq;
@@ -300,13 +302,15 @@
             let finalScore = finalMCQ + finalSQ + finalCQ;
             let totalPossible = parseFloat(currentSubjectData.max_mcq || 0) + parseFloat(currentSubjectData.max_sq || 0) + parseFloat(currentSubjectData.max_cq || 0);
 
-            document.getElementById('total-earned').innerText = finalScore.toFixed(1);
+            // FIX 2: Truncate the score so it drops all decimals
+            document.getElementById('total-earned').innerText = Math.trunc(finalScore);
             document.getElementById('total-possible').innerText = totalPossible;
             let pct = totalPossible > 0 ? Math.round((finalScore / totalPossible) * 100) : 0;
             document.getElementById('progress-bar').style.width = pct + '%';
             document.getElementById('progress-percentage').innerText = pct + '%';
 
-            return finalScore;
+            // Return truncated score so the database saves a clean integer instead of fractions
+            return Math.trunc(finalScore);
         }
 
         async function saveProgressToDB(currentScore) {
