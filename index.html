@@ -8,11 +8,12 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
+        @import url('https://fonts.maateen.me/kalpurush/font.css');
+
         @font-face {
-            font-family: 'Kalpurush-Typography';
-            src: url('https://fonts.maateen.me/kalpurush/Kalpurush-v0.258.woff2') format('woff2');
-            unicode-range: U+0980-09FF, U+003A, U+002C, U+002E, U+002D;
-            font-display: swap;
+            font-family: 'Kalpurush';
+            src: local('Kalpurush'), url('https://fonts.maateen.me/kalpurush/font.css');
+            unicode-range: U+0980-09FF;
         }
 
         :root {
@@ -25,7 +26,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', 'Kalpurush-Typography', system-ui, sans-serif;
+            font-family: 'Segoe UI', system-ui, 'Kalpurush', sans-serif;
             background: var(--bg);
             color: var(--text-main);
             margin: 0;
@@ -106,7 +107,7 @@
             margin: 40px auto;
             padding: 0 20px;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 30px;
         }
 
@@ -360,7 +361,7 @@
 
             const rankColumn = `rank_${group}`;
             let filteredSubjects = allSubjects
-                .filter(sub => sub[rankColumn] !== null && sub.is_active !== false)
+                .filter(sub => sub[rankColumn] !== null)
                 .sort((a, b) => a[rankColumn] - b[rankColumn]);
 
             if (filteredSubjects.length === 0) {
@@ -369,8 +370,7 @@
             }
 
             filteredSubjects.forEach(sub => {
-                const cleanId = encodeURIComponent((sub.id || '').trim());
-                const targetUrl = `student.html?sub=${cleanId}${userPhone ? `&phone=${userPhone}&name=${encodeURIComponent(userName)}` : ''}`;
+                const targetUrl = `student.html?sub=${sub.id}${userPhone ? `&phone=${userPhone}&name=${encodeURIComponent(userName)}` : ''}`;
 
                 const marks = studentProgressMap[sub.id];
                 const totalPossible = (parseFloat(sub.max_cq) || 0) + (parseFloat(sub.max_mcq) || 0) + (parseFloat(sub.max_sq) || 0);
