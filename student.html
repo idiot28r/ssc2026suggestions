@@ -7,11 +7,12 @@
     <title>Student Syllabus Tracker</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
+        @import url('https://fonts.maateen.me/kalpurush/font.css');
+
         @font-face {
-            font-family: 'Kalpurush-Typography';
-            src: url('https://fonts.maateen.me/kalpurush/Kalpurush-v0.258.woff2') format('woff2');
-            unicode-range: U+0980-09FF, U+003A, U+002C, U+002E, U+002D;
-            font-display: swap;
+            font-family: 'Kalpurush';
+            src: local('Kalpurush'), url('https://fonts.maateen.me/kalpurush/font.css');
+            unicode-range: U+0980-09FF;
         }
 
         :root {
@@ -23,7 +24,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', 'Kalpurush-Typography', system-ui, sans-serif;
+            font-family: 'Segoe UI', system-ui, 'Kalpurush', sans-serif;
             background: var(--bg);
             color: var(--text-main);
             margin: 0;
@@ -385,10 +386,9 @@
                 return;
             }
 
-            // Fetch Subject Data safely without triggering 406 Single/Multiple row HTTP errors
             // Fetch Subject Data securely using ilike and JS filtering to handle invisible trailing spaces in DB
             const { data: fetchArr, error: subError } = await supabaseClient.from('subjects')
-                .select(`*, sections(id, title, min_cq_required, total_cq_available, rank, chapters(id, title, est_mcq, est_sq, rank, topics(id, title, weight)))`)
+                .select(`*, sections(id, title, min_cq_required, total_cq_available, chapters(id, title, est_mcq, est_sq, topics(id, title, weight)))`)
                 .ilike('id', `${subjectId}%`);
 
             if (subError) {
@@ -430,7 +430,6 @@
             let html = '';
 
             if (subject.sections) {
-                subject.sections.sort((a, b) => (a.rank || 0) - (b.rank || 0));
                 subject.sections.forEach(sec => {
                     html += `
                         <div class="section-card">
@@ -442,7 +441,6 @@
                     `;
 
                     if (sec.chapters) {
-                        sec.chapters.sort((a, b) => (a.rank || 0) - (b.rank || 0));
                         sec.chapters.forEach(chap => {
                             html += `
                                 <li class="chapter-item">
@@ -465,12 +463,12 @@
                                     const isChecked = completedTopicsDb.has(String(top.id)) ? 'checked' : '';
                                     const textClass = isChecked ? 'completed-text' : '';
                                     html += `
-                                        <li class="topic-item" style="align-items: flex-start; gap: 10px;">
-                                            <div style="flex-grow: 1; display:flex; align-items:flex-start;">
-                                                <input type="checkbox" class="topic-checkbox" id="top-${top.id}" data-id="${top.id}" ${isChecked} style="margin-top: 4px;">
-                                                <label class="topic-title ${textClass}" for="top-${top.id}" style="word-break: break-word; line-height: 1.4;">${top.title}</label>
+                                        <li class="topic-item">
+                                            <div style="flex-grow: 1; display:flex; align-items:center;">
+                                                <input type="checkbox" class="topic-checkbox" id="top-${top.id}" data-id="${top.id}" ${isChecked}>
+                                                <label class="topic-title ${textClass}" for="top-${top.id}">${top.title}</label>
                                             </div>
-                                            <span class="star-rating" style="white-space: nowrap; flex-shrink: 0; min-width: max-content; padding-top: 2px;">${getStars(top.weight)}</span>
+                                            <span class="star-rating">${getStars(top.weight)}</span>
                                         </li>
                                     `;
                                 });
@@ -577,7 +575,7 @@
             let gradeText = "সাজেশনের যেসব অংশ তোমার পড়া শেষ হয়েছে - সেগুলোয় টিক দাও";
             if (totalPossible > 0 && finalScore > 0) {
                 if (pct >= 80) {
-                    gradeText = "তোমার A+ পাওয়ার প্রস্তুতি সম্পন্ন হয়েছে";
+                    gradeText = "তোমার A+ পাওয়ার প্রস্তুতি সম্পন্ন হয়েছে!!";
                 } else {
                     let targetAplus = Math.ceil(totalPossible * 0.8);
                     let marksLeft = Math.max(1, targetAplus - Math.trunc(finalScore));
