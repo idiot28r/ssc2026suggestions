@@ -7,12 +7,13 @@
     <title>Teacher Panel - Syllabus & Sorting</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* 1. Add Kalpurush exclusively for Bangla unicode range with specific punctuation */
+        /* 1. Add Kalpurush exclusively for Bangla unicode range */
+        @import url('https://fonts.maateen.me/kalpurush/font.css');
+
         @font-face {
-            font-family: 'Kalpurush-Typography';
-            src: url('https://fonts.maateen.me/kalpurush/Kalpurush-v0.258.woff2') format('woff2');
-            unicode-range: U+0980-09FF, U+003A, U+002C, U+002E, U+002D;
-            font-display: swap;
+            font-family: 'Kalpurush';
+            src: local('Kalpurush'), url('https://fonts.maateen.me/kalpurush/font.css');
+            unicode-range: U+0980-09FF;
         }
 
         :root {
@@ -25,7 +26,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', 'Kalpurush-Typography', system-ui, sans-serif;
+            font-family: 'Segoe UI', system-ui, 'Kalpurush', sans-serif;
             background: var(--bg);
             color: var(--text-main);
             margin: 0;
@@ -673,7 +674,6 @@
                 card.dataset.id = sub.id;
                 card.innerHTML = `
                     <div class="drag-handle" title="Drag to reorder">☰</div>
-                    <button style="position: absolute; top: 15px; right: 45px; background:none; border:none; cursor:pointer; font-size:1.2rem; filter: grayscale(${sub.is_active !== false ? '0' : '100%'}); opacity: ${sub.is_active !== false ? '1' : '0.5'};" onclick="toggleActive('${sub.id}', ${sub.is_active !== false})" title="Toggle Visibility">${sub.is_active !== false ? '👁️' : '🙈'}</button>
                     <button class="del-btn" style="position: absolute; top: 15px; right: 10px;" onclick="removeFromGroup('${sub.id}')" title="Remove from group">X</button>
                     
                     <div class="subject-header-row">
@@ -734,14 +734,6 @@
             await Promise.all(promises);
         }
 
-        async function toggleActive(subjectId, currentState) {
-            const newState = !currentState;
-            const sub = allSubjects.find(s => s.id === subjectId);
-            if (sub) sub.is_active = newState;
-            renderGrid();
-            await updateRecord('subjects', subjectId, 'is_active', newState);
-        }
-
         async function assignToGroup() {
             const select = document.getElementById('unassigned-select');
             if (!select.value) return;
@@ -783,16 +775,15 @@
             let newContainerHtml = '';
 
             if (subject.sections) {
-                // Sort sections by rank
-                subject.sections.sort((a, b) => (a.rank || 0) - (b.rank || 0));
+                // Fallback sort logic if IDs are provided
+                subject.sections.sort((a, b) => a.id.localeCompare(b.id));
 
                 subject.sections.forEach(sec => {
                     // FIXED: UI now displays and updates min_cq_required and total_cq_available
                     let cardHtml = `
-                        <div class="section-card" draggable="true" data-type="section" data-id="${sec.id}" ondragstart="handleDragStart(event, 'section')" ondragover="handleDragOver(event, 'section')" ondrop="handleDrop(event, 'section', '${subjectId}')" ondragend="handleDragEnd(event)">
+                        <div class="section-card">
                             <div class="section-header">
                                 <div style="width: 50%; display: flex; align-items:center;">
-                                    <div class="drag-handle" style="display:inline-block; margin-right:10px; cursor:grab; font-size:1.5rem; color:#9ca3af;">☰</div>
                                     <h2 class="section-title"><input type="text" class="editable" value="${sec.title}" onchange="updateRecord('sections', '${sec.id}', 'title', this.value)"></h2>
                                 </div>
                                 <div style="font-weight: bold; font-size: 0.85rem; display: flex; align-items: center; gap: 10px;">
@@ -805,14 +796,13 @@
                     `;
 
                     if (sec.chapters) {
-                        // Sort chapters by rank
-                        sec.chapters.sort((a, b) => (a.rank || 0) - (b.rank || 0));
+                        // Fallback sort logic
+                        sec.chapters.sort((a, b) => a.id.localeCompare(b.id));
                         sec.chapters.forEach(chap => {
                             cardHtml += `
-                                <li class="chapter-item" draggable="true" data-type="chapter" data-id="${chap.id}" data-parent="${sec.id}" ondragstart="handleDragStart(event, 'chapter')" ondragover="handleDragOver(event, 'chapter')" ondrop="handleDrop(event, 'chapter', '${subjectId}')" ondragend="handleDragEnd(event)">
+                                <li class="chapter-item">
                                     <div class="chapter-header">
                                         <div style="flex-grow: 1; display: flex; align-items: center;">
-                                            <div class="drag-handle" style="display:inline-block; margin-right:8px; cursor:grab; color:#cbd5e1; font-size:1.2rem;">☰</div>
                                             <span class="toggle-arrow">▶</span>
                                             <input type="checkbox" class="chapter-checkbox">
                                             <input type="text" class="editable" style="font-weight:bold; font-size:1.05rem;" value="${chap.title}" onchange="updateRecord('chapters', '${chap.id}', 'title', this.value)">
@@ -938,65 +928,6 @@
                 setTimeout(() => { banner.innerText = "✏️ Admin Edit Mode Active - Changes auto-save instantly"; banner.style.background = "#4f46e5"; }, 2000);
                 if (callback) callback();
             }
-        }
-
-        // --- NESTED DRAG AND DROP ---
-        let draggedItem = null;
-        let dragType = null;
-
-        function handleDragStart(e, type) {
-            draggedItem = e.currentTarget;
-            dragType = type;
-            e.dataTransfer.effectAllowed = 'move';
-            setTimeout(() => { if (draggedItem) draggedItem.style.opacity = '0.5'; }, 0);
-            e.stopPropagation();
-        }
-
-        function handleDragOver(e, type) {
-            e.preventDefault(); 
-            e.dataTransfer.dropEffect = 'move';
-            if (type !== dragType) return;
-            
-            const target = e.currentTarget;
-            if (target !== draggedItem && target.dataset && target.dataset.type === dragType) {
-                if (dragType === 'chapter' && target.dataset.parent !== draggedItem.dataset.parent) return;
-
-                const bounding = target.getBoundingClientRect();
-                const offset = bounding.y + (bounding.height / 2);
-                const parentList = target.parentNode;
-                
-                if (e.clientY - offset > 0) {
-                    parentList.insertBefore(draggedItem, target.nextSibling);
-                } else {
-                    parentList.insertBefore(draggedItem, target);
-                }
-            }
-            e.stopPropagation();
-        }
-
-        function handleDragEnd(e) {
-            if (draggedItem) draggedItem.style.opacity = '1';
-            draggedItem = null;
-            dragType = null;
-        }
-
-        async function handleDrop(e, type, subjectId) {
-            e.stopPropagation();
-            if (draggedItem) draggedItem.style.opacity = '1';
-            
-            const parentList = e.currentTarget.parentNode;
-            const items = Array.from(parentList.children).filter(el => el.dataset && el.dataset.type === type);
-            
-            const table = type === 'section' ? 'sections' : 'chapters';
-            const promises = items.map((item, index) => 
-                supabaseClient.from(table).update({ rank: index + 1 }).eq('id', item.dataset.id)
-            );
-            
-            const banner = document.getElementById('auth-banner');
-            banner.innerText = "⏳ Saving Order..."; banner.style.background = "#f59e0b";
-            await Promise.all(promises);
-            banner.innerText = "✅ Order Saved"; banner.style.background = "#10b981";
-            setTimeout(() => { banner.innerText = "✏️ Admin Edit Mode Active - Changes auto-save instantly"; banner.style.background = "#4f46e5"; }, 2000);
         }
 
         // Initialize dashboard
