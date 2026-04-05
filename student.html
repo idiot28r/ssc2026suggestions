@@ -297,7 +297,7 @@
         <div class="dashboard">
             <div class="header-top">
                 <h2 class="subject-title" id="display-sub-title">Loading...</h2>
-                <a href="index.html" class="back-btn">← Back to Subjects</a>
+                <a href="index.html" class="back-btn" id="back-link">← Back to Subjects</a>
             </div>
 
             <div>
@@ -332,7 +332,8 @@
         });
 
         const urlParams = new URLSearchParams(window.location.search);
-        const subjectId = urlParams.get('sub');
+        let subjectId = urlParams.get('sub');
+        if (subjectId) subjectId = subjectId.trim();
         const userPhone = urlParams.get('phone');
         const userName = urlParams.get('name') || 'Student';
         const isGuest = !userPhone || !subjectId;
@@ -363,6 +364,13 @@
 
         updateStatusUI('idle');
 
+        if (!isGuest) {
+            const backLink = document.getElementById('back-link');
+            if (backLink) {
+                backLink.href = `index.html?phone=${userPhone}&name=${encodeURIComponent(userName)}`;
+            }
+        }
+
         function getStars(weight) {
             const w = parseInt(weight) || 0;
             if (w >= 80) return '⭐⭐⭐⭐⭐';
@@ -377,15 +385,27 @@
                 return;
             }
 
-            // Fetch Subject Data
-            const { data: subject, error: subError } = await supabaseClient.from('subjects')
+            // Fetch Subject Data safely without triggering 406 Single/Multiple row HTTP errors
+            // Fetch Subject Data securely using ilike and JS filtering to handle invisible trailing spaces in DB
+            const { data: fetchArr, error: subError } = await supabaseClient.from('subjects')
                 .select(`*, sections(id, title, min_cq_required, total_cq_available, chapters(id, title, est_mcq, est_sq, topics(id, title, weight)))`)
-                .eq('id', subjectId).single();
+                .ilike('id', `${subjectId}%`);
 
             if (subError) {
                 document.getElementById('syl-container').innerHTML = `<div style="text-align: center; padding: 40px; color: #b91c1c;">Error Loading Subject: ${subError.message}</div>`;
                 return;
             }
+            
+            // Match the subject exactly by trimming invisible spaces from both sides
+            const subject = fetchArr ? fetchArr.find(s => (s.id || '').trim().toLowerCase() === (subjectId || '').toLowerCase()) : null;
+
+            if (!subject) {
+                document.getElementById('syl-container').innerHTML = `<div style="text-align: center; padding: 40px; color: #b91c1c;">Error: Subject not found. It may have been deleted or the ID is incorrect.</div>`;
+                return;
+            }
+            
+            // CRUCIAL: Reassign the global subjectId to exactly match the database's string (including spaces) so progress saves correctly!
+            subjectId = subject.id;
 
             // Fetch Student Progress
             let completedTopicsDb = new Set();
