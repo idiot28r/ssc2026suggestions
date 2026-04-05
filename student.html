@@ -7,12 +7,11 @@
     <title>Student Syllabus Tracker</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        @import url('https://fonts.maateen.me/kalpurush/font.css');
-
         @font-face {
-            font-family: 'Kalpurush';
-            src: local('Kalpurush'), url('https://fonts.maateen.me/kalpurush/font.css');
-            unicode-range: U+0980-09FF;
+            font-family: 'Kalpurush-Typography';
+            src: url('https://fonts.maateen.me/kalpurush/Kalpurush-v0.258.woff2') format('woff2');
+            unicode-range: U+0980-09FF, U+003A, U+002C, U+002E, U+002D;
+            font-display: swap;
         }
 
         :root {
@@ -24,7 +23,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', system-ui, 'Kalpurush', sans-serif;
+            font-family: 'Segoe UI', 'Kalpurush-Typography', system-ui, sans-serif;
             background: var(--bg);
             color: var(--text-main);
             margin: 0;
@@ -128,11 +127,11 @@
         }
 
         .sub-text {
-            font-size: 0.75rem;
-            color: #6b7280;
+            font-size: 1.1rem;
+            color: #239e48;
             text-align: center;
-            margin-top: 5px;
-            font-weight: 500;
+            margin-top: 8px;
+            font-weight: 700;
         }
 
         .syl-grid {
@@ -306,14 +305,15 @@
                     <span>Estimated Exam Score</span>
                     <span id="progress-percentage">0%</span>
                 </div>
-                <div id="progress-breakdown" style="display: flex; height: 20px; margin-bottom: 8px; border-radius: 6px; overflow: hidden; gap: 2px; width: 100%; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
+                <div id="progress-breakdown"
+                    style="display: flex; height: 20px; margin-bottom: 8px; border-radius: 6px; overflow: hidden; gap: 2px; width: 100%; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
                 </div>
                 <div class="progress-container">
                     <div class="progress-fill" id="progress-bar"></div>
                     <div class="progress-text"><span id="total-earned">0</span> / <span id="total-possible">0</span>
                         Marks Covered</div>
                 </div>
-                <div class="sub-text">Logic: Mandatory 1 CQ per section + SQ/MCQ completion + 1 Extra CQ.</div>
+                <div class="sub-text" id="grade-subtext">সাজেশনের যেসব অংশ তোমার পড়া শেষ হয়েছে - সেগুলোয় টিক দাও</div>
             </div>
         </div>
     </header>
@@ -388,14 +388,14 @@
             // Fetch Subject Data safely without triggering 406 Single/Multiple row HTTP errors
             // Fetch Subject Data securely using ilike and JS filtering to handle invisible trailing spaces in DB
             const { data: fetchArr, error: subError } = await supabaseClient.from('subjects')
-                .select(`*, sections(id, title, min_cq_required, total_cq_available, chapters(id, title, est_mcq, est_sq, topics(id, title, weight)))`)
+                .select(`*, sections(id, title, min_cq_required, total_cq_available, rank, chapters(id, title, est_mcq, est_sq, rank, topics(id, title, weight)))`)
                 .ilike('id', `${subjectId}%`);
 
             if (subError) {
                 document.getElementById('syl-container').innerHTML = `<div style="text-align: center; padding: 40px; color: #b91c1c;">Error Loading Subject: ${subError.message}</div>`;
                 return;
             }
-            
+
             // Match the subject exactly by trimming invisible spaces from both sides
             const subject = fetchArr ? fetchArr.find(s => (s.id || '').trim().toLowerCase() === (subjectId || '').toLowerCase()) : null;
 
@@ -403,7 +403,7 @@
                 document.getElementById('syl-container').innerHTML = `<div style="text-align: center; padding: 40px; color: #b91c1c;">Error: Subject not found. It may have been deleted or the ID is incorrect.</div>`;
                 return;
             }
-            
+
             // CRUCIAL: Reassign the global subjectId to exactly match the database's string (including spaces) so progress saves correctly!
             subjectId = subject.id;
 
@@ -430,6 +430,7 @@
             let html = '';
 
             if (subject.sections) {
+                subject.sections.sort((a, b) => (a.rank || 0) - (b.rank || 0));
                 subject.sections.forEach(sec => {
                     html += `
                         <div class="section-card">
@@ -441,6 +442,7 @@
                     `;
 
                     if (sec.chapters) {
+                        sec.chapters.sort((a, b) => (a.rank || 0) - (b.rank || 0));
                         sec.chapters.forEach(chap => {
                             html += `
                                 <li class="chapter-item">
@@ -458,16 +460,17 @@
                             `;
 
                             if (chap.topics) {
+                                chap.topics.sort((a, b) => Number(b.weight) - Number(a.weight));
                                 chap.topics.forEach(top => {
                                     const isChecked = completedTopicsDb.has(String(top.id)) ? 'checked' : '';
                                     const textClass = isChecked ? 'completed-text' : '';
                                     html += `
-                                        <li class="topic-item">
-                                            <div style="flex-grow: 1; display:flex; align-items:center;">
-                                                <input type="checkbox" class="topic-checkbox" id="top-${top.id}" data-id="${top.id}" ${isChecked}>
-                                                <label class="topic-title ${textClass}" for="top-${top.id}">${top.title}</label>
+                                        <li class="topic-item" style="align-items: flex-start; gap: 10px;">
+                                            <div style="flex-grow: 1; display:flex; align-items:flex-start;">
+                                                <input type="checkbox" class="topic-checkbox" id="top-${top.id}" data-id="${top.id}" ${isChecked} style="margin-top: 4px;">
+                                                <label class="topic-title ${textClass}" for="top-${top.id}" style="word-break: break-word; line-height: 1.4;">${top.title}</label>
                                             </div>
-                                            <span class="star-rating">${getStars(top.weight)}</span>
+                                            <span class="star-rating" style="white-space: nowrap; flex-shrink: 0; min-width: max-content; padding-top: 2px;">${getStars(top.weight)}</span>
                                         </li>
                                     `;
                                 });
@@ -499,7 +502,7 @@
 
             const cqValue = parseFloat(currentSubjectData.cq_value_per_q || 10);
             const sqValue = parseFloat(currentSubjectData.sq_value_per_q || 2);
-            
+
             const totalCqToAnswer = cqValue > 0 ? (maxCq / cqValue) : 0;
 
             currentSubjectData.sections.forEach(sec => {
@@ -559,7 +562,7 @@
 
             let globalOverflowCap = Math.max(0, totalCqToAnswer - totalMinRequiredCQ);
             let finalCQ = (totalMandatoryCQ + Math.min(totalOverflowCQ, globalOverflowCap)) * cqValue;
-            
+
             finalCQ = Math.min(finalCQ, maxCq);
 
             let finalScore = finalMCQ + finalSQ + finalCQ;
@@ -570,6 +573,19 @@
             let pct = totalPossible > 0 ? Math.round((finalScore / totalPossible) * 100) : 0;
             document.getElementById('progress-bar').style.width = pct + '%';
             document.getElementById('progress-percentage').innerText = pct + '%';
+
+            let gradeText = "সাজেশনের যেসব অংশ তোমার পড়া শেষ হয়েছে - সেগুলোয় টিক দাও";
+            if (totalPossible > 0 && finalScore > 0) {
+                if (pct >= 80) {
+                    gradeText = "তোমার A+ পাওয়ার প্রস্তুতি সম্পন্ন হয়েছে";
+                } else {
+                    let targetAplus = Math.ceil(totalPossible * 0.8);
+                    let marksLeft = Math.max(1, targetAplus - Math.trunc(finalScore));
+                    gradeText = `A+ পেতে তোমার আরও ${marksLeft} মার্কের প্রস্তুতি বাকি`;
+                }
+            }
+            const subtextEl = document.getElementById('grade-subtext');
+            if (subtextEl) subtextEl.innerText = gradeText;
 
             if (totalPossible > 0) {
                 const breakdownHtml = [];
@@ -604,7 +620,7 @@
                     `);
                 }
                 const breakdownEl = document.getElementById('progress-breakdown');
-                if(breakdownEl) breakdownEl.innerHTML = breakdownHtml.join('');
+                if (breakdownEl) breakdownEl.innerHTML = breakdownHtml.join('');
             }
 
             return Math.trunc(finalScore);
