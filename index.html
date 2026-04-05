@@ -59,6 +59,27 @@
         
         .enter-btn { width: 100%; text-align: center; padding: 12px; background: var(--primary); color: white; font-weight: bold; border-radius: 6px; border: none; font-size: 1rem; margin-top: auto;}
     </style>
+    <!-- KaTeX Support -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script>
+        function applyKatexToElement(el) {
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(el, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\(', right: '\\)', display: false},
+                        {left: '\\[', right: '\\]', display: true}
+                    ]
+                });
+            } else {
+                setTimeout(() => applyKatexToElement(el), 200);
+            }
+        }
+        window.addEventListener('DOMContentLoaded', () => applyKatexToElement(document.body));
+    </script>
 </head>
 <body>
 
@@ -159,7 +180,8 @@
             }
 
             filteredSubjects.forEach(sub => {
-                const targetUrl = `student.html?sub=${sub.id}${userPhone ? `&phone=${userPhone}&name=${encodeURIComponent(userName)}` : ''}`;
+                const cleanId = encodeURIComponent((sub.id || '').trim());
+                const targetUrl = `student.html?sub=${cleanId}${userPhone ? `&phone=${userPhone}&name=${encodeURIComponent(userName)}` : ''}`;
                 
                 const marks = studentProgressMap[sub.id];
                 const totalPossible = (parseFloat(sub.max_cq) || 0) + (parseFloat(sub.max_mcq) || 0) + (parseFloat(sub.max_sq) || 0);
@@ -219,6 +241,7 @@
                     </div>
                 `;
             });
+            applyKatexToElement(grid);
         }
 
         setupUserUI();
