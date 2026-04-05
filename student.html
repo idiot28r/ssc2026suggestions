@@ -228,107 +228,90 @@
         }
 
 function calculateEstimatedMarks() {
-            if (!currentSubjectData) return 0;
+            if (!currentSubjectData) return 0;
 
-            let totalEarnedMCQ = 0;
-            let totalEarnedSQCount = 0;
-            let totalMandatoryCQ = 0;
-            let totalOverflowCQ = 0;
-            let totalMinRequiredCQ = 0;
+            let totalEarnedMCQ = 0;
+            let totalEarnedSQCount = 0;
+            let totalMandatoryCQ = 0;
+            let totalOverflowCQ = 0;
+            let totalMinRequiredCQ = 0;
 
-            const cqValue = parseFloat(currentSubjectData.cq_value_per_q || 10);
-            const sqValue = parseFloat(currentSubjectData.sq_value_per_q || 2);
-            const totalCqToAnswer = parseFloat(currentSubjectData.total_cq_to_answer || 5);
-            
-            // Maximum possible marks fetched from DB
-            const maxMcqMarks = parseFloat(currentSubjectData.max_mcq || 30);
-            const maxSqMarks = parseFloat(currentSubjectData.max_sq || 0); // e.g., 20
-            const maxCqMarks = parseFloat(currentSubjectData.max_cq || 50);
+            const cqValue = parseFloat(currentSubjectData.cq_value_per_q || 10);
+            const sqValue = parseFloat(currentSubjectData.sq_value_per_q || 2);
+            const totalCqToAnswer = parseFloat(currentSubjectData.total_cq_to_answer || 5);
 
-            currentSubjectData.sections.forEach(sec => {
-                let secWeightTotal = 0;
-                let secWeightEarned = 0;
+            currentSubjectData.sections.forEach(sec => {
+                let secWeightTotal = 0;
+                let secWeightEarned = 0;
 
-                sec.chapters.forEach(chap => {
-                    let chapWeightTotal = 0;
-                    let chapWeightEarned = 0;
-                    
-                    let chapterCheckbox = document.getElementById(`chap-${chap.id}`);
-                    let allChecked = true, anyChecked = false, count = 0;
+                sec.chapters.forEach(chap => {
+                    let chapWeightTotal = 0;
+                    let chapWeightEarned = 0;
+                    
+                    let chapterCheckbox = document.getElementById(`chap-${chap.id}`);
+                    let allChecked = true, anyChecked = false, count = 0;
 
-                    chap.topics.forEach(top => {
-                        count++;
-                        let w = parseFloat(top.weight || 0);
-                        chapWeightTotal += w;
-                        let cb = document.getElementById(`top-${top.id}`);
-                        let label = cb ? cb.nextElementSibling : null;
-                        
-                        if (cb && cb.checked) {
-                            chapWeightEarned += w;
-                            if (label) label.classList.add('completed-text');
-                            anyChecked = true;
-                        } else {
-                            if (label) label.classList.remove('completed-text');
-                            allChecked = false;
-                        }
-                    });
+                    chap.topics.forEach(top => {
+                        count++;
+                        let w = parseFloat(top.weight || 0);
+                        chapWeightTotal += w;
+                        let cb = document.getElementById(`top-${top.id}`);
+                        let label = cb.nextElementSibling;
+                        
+                        if (cb && cb.checked) {
+                            chapWeightEarned += w;
+                            label.classList.add('completed-text');
+                            anyChecked = true;
+                        } else {
+                            label.classList.remove('completed-text');
+                            allChecked = false;
+                        }
+                    });
 
-                    if (count > 0 && chapterCheckbox) {
-                        chapterCheckbox.checked = allChecked;
-                        chapterCheckbox.indeterminate = !allChecked && anyChecked;
-                    }
+                    if (count > 0 && chapterCheckbox) {
+                        chapterCheckbox.checked = allChecked;
+                        chapterCheckbox.indeterminate = !allChecked && anyChecked;
+                    }
 
-                    let ratio = chapWeightTotal > 0 ? (chapWeightEarned / chapWeightTotal) : 0;
-                    totalEarnedMCQ += ratio * parseFloat(chap.est_mcq || 0);
-                    totalEarnedSQCount += ratio * parseFloat(chap.est_sq || 0);
-                    
-                    secWeightTotal += chapWeightTotal;
-                    secWeightEarned += chapWeightEarned;
-                });
+                    let ratio = chapWeightTotal > 0 ? (chapWeightEarned / chapWeightTotal) : 0;
+                    totalEarnedMCQ += ratio * parseFloat(chap.est_mcq || 0);
+                    totalEarnedSQCount += ratio * parseFloat(chap.est_sq || 0);
+                    
+                    secWeightTotal += chapWeightTotal;
+                    secWeightEarned += chapWeightEarned;
+                });
 
-                let secRatio = secWeightTotal > 0 ? (secWeightEarned / secWeightTotal) : 0;
-                
-                // Safely parse minReq. Maintains 0 if defined as 0.
-                let minReq = (sec.min_cq_required !== null && sec.min_cq_required !== undefined && sec.min_cq_required !== '') 
-                    ? parseFloat(sec.min_cq_required) : 1;
-                let avail = parseFloat(sec.total_cq_available || 2);
-                
-                totalMinRequiredCQ += minReq;
-                
-                // Step C: Split into Buckets
-                let potential = avail * secRatio;
-                totalMandatoryCQ += Math.min(potential, minReq);
-                totalOverflowCQ += Math.max(0, potential - minReq);
-            });
+                let secRatio = secWeightTotal > 0 ? (secWeightEarned / secWeightTotal) : 0;
+                
+                // FIX 1: Safely parse minReq. If it's 0, it will now stay 0 instead of defaulting to 1.
+                let minReq = (sec.min_cq_required !== null && sec.min_cq_required !== undefined && sec.min_cq_required !== '') ? parseFloat(sec.min_cq_required) : 1;
+                let avail = parseFloat(sec.total_cq_available || 2);
+                
+                totalMinRequiredCQ += minReq;
+                let potential = avail * secRatio;
+                totalMandatoryCQ += Math.min(potential, minReq);
+                totalOverflowCQ += Math.max(0, potential - minReq);
+            });
 
-            // Step D & 3: Final Tallies with Strict Capping
-            let finalMCQ = Math.min(totalEarnedMCQ, maxMcqMarks);
-            let finalSQ = Math.min(totalEarnedSQCount * sqValue, maxSqMarks);
-            
-            let globalOverflowCap = Math.max(0, totalCqToAnswer - totalMinRequiredCQ);
-            let calculatedCQMarks = (totalMandatoryCQ + Math.min(totalOverflowCQ, globalOverflowCap)) * cqValue;
-            let finalCQ = Math.min(calculatedCQMarks, maxCqMarks);
-
-            let finalScore = finalMCQ + finalSQ + finalCQ;
-            let totalPossible = maxMcqMarks + maxSqMarks + maxCqMarks;
-
-            // Ultimate fallback to guarantee the UI never breaks 100%
-            finalScore = Math.min(finalScore, totalPossible);
+            let finalMCQ = Math.min(totalEarnedMCQ, parseFloat(currentSubjectData.max_mcq || 30));
+            let finalSQ = Math.min(totalEarnedSQCount, parseFloat(currentSubjectData.total_sq_to_answer || 10)) * sqValue;
             
-            // Truncate to remove decimals
-            let truncatedScore = Math.trunc(finalScore);
+            let globalOverflowCap = Math.max(0, totalCqToAnswer - totalMinRequiredCQ);
+            let finalCQ = (totalMandatoryCQ + Math.min(totalOverflowCQ, globalOverflowCap)) * cqValue;
 
-            document.getElementById('total-earned').innerText = truncatedScore;
-            document.getElementById('total-possible').innerText = totalPossible;
-            
-            let pct = totalPossible > 0 ? Math.round((truncatedScore / totalPossible) * 100) : 0;
-            pct = Math.min(pct, 100); // Prevent CSS progress bar from pushing past 100% width
-            
-            document.getElementById('progress-bar').style.width = pct + '%';
-            document.getElementById('progress-percentage').innerText = pct + '%';
+            let finalScore = finalMCQ + finalSQ + finalCQ;
+            let totalPossible = parseFloat(currentSubjectData.max_mcq || 0) + parseFloat(currentSubjectData.max_sq || 0) + parseFloat(currentSubjectData.max_cq || 0);
 
-            return truncatedScore;
-        }
+            // FIX 2: Truncate the score so it drops all decimals
+            document.getElementById('total-earned').innerText = Math.trunc(finalScore);
+            document.getElementById('total-possible').innerText = totalPossible;
+            let pct = totalPossible > 0 ? Math.round((finalScore / totalPossible) * 100) : 0;
+            document.getElementById('progress-bar').style.width = pct + '%';
+            document.getElementById('progress-percentage').innerText = pct + '%';
+
+            // Return truncated score so the database saves a clean integer instead of fractions
+            return Math.trunc(finalScore);
+        }
 
         async function saveProgressToDB(currentScore) {
             if (isGuest) return;
