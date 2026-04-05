@@ -352,14 +352,14 @@
 
             banner.className = 'top-status-bar status-logged-in';
             if (state === 'saving') {
-                banner.innerText = `👤 Logged in as ${userName} (${userPhone}) — ⏳ Saving...`;
+                banner.innerText = `👤 Logged in as ${userName} — ⏳ Saving...`;
             } else if (state === 'error') {
-                banner.innerText = `👤 Logged in as ${userName} (${userPhone}) — ❌ Error Saving`;
+                banner.innerText = `👤 Logged in as ${userName} — ❌ Error Saving`;
             } else if (state === 'saved') {
-                banner.innerText = `👤 Logged in as ${userName} (${userPhone}) — ✅ All changes saved`;
+                banner.innerText = `👤 Logged in as ${userName} — ✅ All changes saved`;
                 setTimeout(() => updateStatusUI('idle'), 3000);
             } else {
-                banner.innerText = `👤 Logged in as ${userName} (${userPhone})`;
+                banner.innerText = `👤 Logged in as ${userName}`;
             }
         }
 
